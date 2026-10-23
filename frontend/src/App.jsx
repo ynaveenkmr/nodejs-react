@@ -1,245 +1,257 @@
+import { useState } from "react";
 
-import { useEffect, useState } from "react";
+const API_URL = "http://localhost:5000/api/auth";
 
-const API_URL = "http://localhost:5000/api/users";
+export default function App() {
+  const [page, setPage] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-function App() {
-  const [users, setUsers] = useState([]);
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  async function handleLogin(e) {
+    e.preventDefault();
+    setMessage("");
+    setLoading(true);
 
-  async function fetchUsers() {
     try {
-      setError("");
-
-      const response = await fetch(API_URL);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch users");
-      }
+      const response = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
       const data = await response.json();
-      setUsers(data);
-    } catch (err) {
-      setError(err.message);
+
+      if (!response.ok) {
+        throw new Error(data.message || "Login failed");
+      }
+
+      localStorage.setItem("token", data.token);
+      setToken(data.token);
+      setUser(data.user);
+      setPage("profile");
+      setMessage("Login successful!");
+      setPassword("");
+    } catch (error) {
+      setMessage(error.message || "Unable to connect to server");
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    let isActive = true;
-
-    async function loadUsers() {
-      try {
-        setError("");
-
-        const response = await fetch(API_URL);
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch users");
-        }
-
-        const data = await response.json();
-
-        if (isActive) {
-          setUsers(data);
-        }
-      } catch (err) {
-        if (isActive) {
-          setError(err.message);
-        }
-      } finally {
-        if (isActive) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadUsers();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    const isEditing = editingId !== null;
-    const url = isEditing
-      ? `${API_URL}/${editingId}`
-      : API_URL;
+  async function loadProfile() {
+    setMessage("");
+    setLoading(true);
 
     try {
-      setSaving(true);
-      setError("");
+      const response = await fetch(`${API_URL}/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      const response = await fetch(url, {
-        method: isEditing ? "PUT" : "POST",
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Unable to load profile");
+      }
+
+      setUser(data);
+      setPage("profile");
+    } catch (error) {
+      setMessage(error.message || "Unable to load profile");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    setMessage("");
+
+    if (newPassword.length < 8) {
+      setMessage("New password must be at least 8 characters.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setMessage("New passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/change-password`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name: name.trim(),
-          role: role.trim(),
+          currentPassword: password,
+          newPassword,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Request failed");
+        throw new Error(data.message || "Password update failed");
       }
 
-      setName("");
-      setRole("");
-      setEditingId(null);
-
-      await fetchUsers();
-    } catch (err) {
-      setError(err.message);
+      setMessage("Password updated successfully. Please log in again.");
+      handleLogout();
+    } catch (error) {
+      setMessage(error.message || "Unable to connect to server");
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   }
 
-  function handleEdit(user) {
-    setEditingId(user.id);
-    setName(user.name);
-    setRole(user.role);
-    setError("");
-  }
-
-  async function handleDelete(id) {
-    if (!window.confirm("Are you sure you want to delete this user?")) {
-      return;
-    }
-
-    try {
-      setError("");
-
-      const response = await fetch(`${API_URL}/${id}`, {
-        method: "DELETE",
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Delete failed");
-      }
-
-      if (editingId === id) {
-        resetForm();
-      }
-
-      await fetchUsers();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  function resetForm() {
-    setName("");
-    setRole("");
-    setEditingId(null);
+  function handleLogout() {
+    localStorage.removeItem("token");
+    setToken("");
+    setUser(null);
+    setPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPage("login");
   }
 
   return (
-    <main style={{ maxWidth: 800, margin: "40px auto", padding: 20 }}>
-      <h1>Node.js Interview Practice</h1>
-      <h2>User Management</h2>
+    <main style={styles.container}>
+      <section style={styles.card}>
+        <h2>Node.js User Portal</h2>
 
-      {error && (
-        <p role="alert" style={{ color: "red" }}>
-          {error}
-        </p>
-      )}
+        {message && <p role="status">{message}</p>}
 
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: 12 }}>
-          <label htmlFor="name">Name</label>
-          <br />
-          <input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            maxLength={100}
-            style={{ padding: 8, width: "100%", boxSizing: "border-box" }}
-          />
-        </div>
+        {page === "login" && (
+          <form onSubmit={handleLogin}>
+            <h3>Login</h3>
 
-        <div style={{ marginBottom: 12 }}>
-          <label htmlFor="role">Role</label>
-          <br />
-          <input
-            id="role"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            required
-            maxLength={100}
-            style={{ padding: 8, width: "100%", boxSizing: "border-box" }}
-          />
-        </div>
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+            <br />
 
-        <button type="submit" disabled={saving}>
-          {saving
-            ? "Saving..."
-            : editingId !== null
-              ? "Update User"
-              : "Add User"}
-        </button>
-
-        {editingId !== null && (
-          <button type="button" onClick={resetForm} style={{ marginLeft: 8 }}>
-            Cancel
-          </button>
+            <label>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+            <br />
+            <button disabled={loading}>
+              {loading ? "Logging in..." : "Login"}
+            </button>
+          </form>
         )}
-      </form>
 
-      <hr />
+        {page === "profile" && (
+          <>
+            <h3>My Profile</h3>
+            <p>Name: {user?.name || "Loading..."}</p>
+            <p>Email: {user?.email || ""}</p>
 
-      <h2>Users ({users.length})</h2>
+            <button onClick={loadProfile} disabled={loading}>
+              Refresh Profile
+            </button>
 
-      {loading ? (
-        <p>Loading users...</p>
-      ) : users.length === 0 ? (
-        <p>No users found. Add your first user.</p>
-      ) : (
-        users.map((user) => (
-          <div
-            key={user.id}
-            style={{
-              border: "1px solid #ccc",
-              padding: 16,
-              marginBottom: 12,
-              borderRadius: 8,
-            }}
-          >
-            <strong>{user.name}</strong>
-            <p>{user.role}</p>
+            <button
+              onClick={() => {
+                setPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setPage("changePassword");
+                setMessage("");
+              }}
+            >
+              Change Password
+            </button>
 
-            <button type="button" onClick={() => handleEdit(user)}>
-              Edit
+            <button onClick={handleLogout}>Logout</button>
+          </>
+        )}
+
+        {page === "changePassword" && (
+          <form onSubmit={handleChangePassword}>
+            <h3>Change Password</h3>
+
+            <label>Current Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+
+            <label>New Password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+
+            <label>Confirm New Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+
+            <button disabled={loading}>
+              {loading ? "Updating..." : "Update Password"}
             </button>
 
             <button
               type="button"
-              onClick={() => handleDelete(user.id)}
-              style={{ marginLeft: 8 }}
+              onClick={() => {
+                setPage("profile");
+                setMessage("");
+              }}
             >
-              Delete
+              Cancel
             </button>
-          </div>
-        ))
-      )}
+          </form>
+        )}
+      </section>
     </main>
   );
 }
 
-export default App;
+const styles = {
+  container: {
+    minHeight: "100vh",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    background: "#f4f6f8",
+    fontFamily: "Arial, sans-serif",
+  },
+  card: {
+    width: "100%",
+    maxWidth: "380px",
+    padding: "28px",
+    borderRadius: "12px",
+    background: "#fff",
+    boxShadow: "0 4px 18px rgba(0,0,0,0.1)",
+  },
+};
