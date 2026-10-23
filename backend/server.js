@@ -1,4 +1,3 @@
-
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -14,11 +13,30 @@ app.get("/", (req, res) => {
   res.json({ message: "Node.js + PostgreSQL API is running!" });
 });
 
+//A health endpoint helps you verify that both your Express server and PostgreSQL database are reachable.
+app.get("/health", async (req, res) => {
+  try {
+    await pool.query("SELECT 1");
+
+    res.status(200).json({
+      status: "OK",
+      database: "Connected",
+    });
+  } catch (error) {
+    console.error("Database health check failed:", error);
+
+    res.status(503).json({
+      status: "ERROR",
+      database: "Unavailable",
+    });
+  }
+});
+
 // GET: all users
 app.get("/api/users", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, name, role FROM users ORDER BY id"
+      "SELECT id, name, role FROM users ORDER BY id",
     );
 
     res.json(result.rows);
@@ -33,8 +51,10 @@ app.post("/api/users", async (req, res) => {
   const { name, role } = req.body;
 
   if (
-    typeof name !== "string" || !name.trim() ||
-    typeof role !== "string" || !role.trim() ||
+    typeof name !== "string" ||
+    !name.trim() ||
+    typeof role !== "string" ||
+    !role.trim() ||
     name.trim().length > 100 ||
     role.trim().length > 100
   ) {
@@ -46,7 +66,7 @@ app.post("/api/users", async (req, res) => {
   try {
     const result = await pool.query(
       "INSERT INTO users (name, role) VALUES ($1, $2) RETURNING id, name, role",
-      [name.trim(), role.trim()]
+      [name.trim(), role.trim()],
     );
 
     res.status(201).json(result.rows[0]);
@@ -62,9 +82,12 @@ app.put("/api/users/:id", async (req, res) => {
   const { name, role } = req.body;
 
   if (
-    !Number.isInteger(id) || id < 1 ||
-    typeof name !== "string" || !name.trim() ||
-    typeof role !== "string" || !role.trim() ||
+    !Number.isInteger(id) ||
+    id < 1 ||
+    typeof name !== "string" ||
+    !name.trim() ||
+    typeof role !== "string" ||
+    !role.trim() ||
     name.trim().length > 100 ||
     role.trim().length > 100
   ) {
@@ -77,7 +100,7 @@ app.put("/api/users/:id", async (req, res) => {
        SET name = $1, role = $2
        WHERE id = $3
        RETURNING id, name, role`,
-      [name.trim(), role.trim(), id]
+      [name.trim(), role.trim(), id],
     );
 
     if (result.rows.length === 0) {
@@ -102,7 +125,7 @@ app.delete("/api/users/:id", async (req, res) => {
   try {
     const result = await pool.query(
       "DELETE FROM users WHERE id = $1 RETURNING id",
-      [id]
+      [id],
     );
 
     if (result.rows.length === 0) {

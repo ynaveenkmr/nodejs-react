@@ -1,123 +1,109 @@
 
-const express = require("express");
-const cors = require("cors");
-require("dotenv").config();
+// const express = require("express");
+// const cors = require("cors");
 
-const pool = require("./db");
+// const app = express();
 
-const app = express();
+// app.use(cors());
+// app.use(express.json());
 
-app.use(cors());
-app.use(express.json());
+// // Root route
+// app.get("/", (req, res) => {
+//   res.json({ message: "Node.js backend is running!" });
+// });
 
-app.get("/", (req, res) => {
-  res.json({ message: "Node.js + PostgreSQL API is running!" });
-});
+// let users = [
+//   { id: 1, name: "Naveen", role: "Frontend Developer" },
+//   { id: 2, name: "Rahul", role: "Backend Developer" },
+// ];
 
-// GET: all users
-app.get("/api/users", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT id, name, role FROM users ORDER BY id"
-    );
+// // GET: Fetch all users
+// app.get("/api/users", (req, res) => {
+//   res.json(users);
+// });
 
-    res.json(result.rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to fetch users" });
-  }
-});
+// // GET: Fetch one user
+// app.get("/api/users/:id", (req, res) => {
+//   const user = users.find(
+//     (u) => u.id === Number(req.params.id)
+//   );
 
-// POST: create a user
-app.post("/api/users", async (req, res) => {
-  const { name, role } = req.body;
+//   if (!user) {
+//     return res.status(404).json({ message: "User not found" });
+//   }
 
-  if (
-    typeof name !== "string" || !name.trim() ||
-    typeof role !== "string" || !role.trim() ||
-    name.trim().length > 100 ||
-    role.trim().length > 100
-  ) {
-    return res.status(400).json({
-      message: "Name and role are required (maximum 100 characters each)",
-    });
-  }
+//   res.json(user);
+// });
 
-  try {
-    const result = await pool.query(
-      "INSERT INTO users (name, role) VALUES ($1, $2) RETURNING id, name, role",
-      [name.trim(), role.trim()]
-    );
+// // POST: Create a user
+// app.post("/api/users", (req, res) => {
+//   const { name, role } = req.body;
 
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to create user" });
-  }
-});
+//   if (
+//     typeof name !== "string" ||
+//     !name.trim() ||
+//     typeof role !== "string" ||
+//     !role.trim()
+//   ) {
+//     return res.status(400).json({
+//       message: "Valid name and role are required",
+//     });
+//   }
 
-// PUT: update a user
-app.put("/api/users/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  const { name, role } = req.body;
+//   const newUser = {
+//     id: Math.max(0, ...users.map((u) => u.id)) + 1,
+//     name: name.trim(),
+//     role: role.trim(),
+//   };
 
-  if (
-    !Number.isInteger(id) || id < 1 ||
-    typeof name !== "string" || !name.trim() ||
-    typeof role !== "string" || !role.trim() ||
-    name.trim().length > 100 ||
-    role.trim().length > 100
-  ) {
-    return res.status(400).json({ message: "Invalid user ID, name or role" });
-  }
+//   users.push(newUser);
 
-  try {
-    const result = await pool.query(
-      `UPDATE users
-       SET name = $1, role = $2
-       WHERE id = $3
-       RETURNING id, name, role`,
-      [name.trim(), role.trim(), id]
-    );
+//   res.status(201).json(newUser);
+// });
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
+// // PUT: Update a user
+// app.put("/api/users/:id", (req, res) => {
+//   const user = users.find(
+//     (u) => u.id === Number(req.params.id)
+//   );
 
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to update user" });
-  }
-});
+//   if (!user) {
+//     return res.status(404).json({ message: "User not found" });
+//   }
 
-// DELETE: remove a user
-app.delete("/api/users/:id", async (req, res) => {
-  const id = Number(req.params.id);
+//   const { name, role } = req.body;
 
-  if (!Number.isInteger(id) || id < 1) {
-    return res.status(400).json({ message: "Invalid user ID" });
-  }
+//   if (
+//     typeof name !== "string" ||
+//     !name.trim() ||
+//     typeof role !== "string" ||
+//     !role.trim()
+//   ) {
+//     return res.status(400).json({
+//       message: "Valid name and role are required",
+//     });
+//   }
 
-  try {
-    const result = await pool.query(
-      "DELETE FROM users WHERE id = $1 RETURNING id",
-      [id]
-    );
+//   user.name = name.trim();
+//   user.role = role.trim();
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
+//   res.json(user);
+// });
 
-    res.json({ message: "User deleted successfully" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to delete user" });
-  }
-});
+// // DELETE: Delete a user
+// app.delete("/api/users/:id", (req, res) => {
+//   const userId = Number(req.params.id);
+//   const exists = users.some((u) => u.id === userId);
 
-const PORT = process.env.PORT || 5000;
+//   if (!exists) {
+//     return res.status(404).json({ message: "User not found" });
+//   }
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+//   users = users.filter((u) => u.id !== userId);
+
+//   res.json({ message: "User deleted successfully" });
+// });
+
+// app.listen(5000, () => {
+//   console.log("Server running at http://localhost:5000");
+// });
