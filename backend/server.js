@@ -136,6 +136,65 @@ app.delete("/api/users/:id", async (req, res, next) => {
   }
 });
 
+// POST: register a user
+app.post("/api/auth/register", async (req, res, next) => {
+  const { name, email, password } = req.body;
+
+  if (
+    typeof name !== "string" ||
+    !name.trim() ||
+    typeof email !== "string" ||
+    !email.trim() ||
+    typeof password !== "string" ||
+    password.length < 8 ||
+    name.trim().length > 100 ||
+    email.trim().length > 255
+  ) {
+    return res.status(400).json({
+      message:
+        "Valid name and email are required; password must be at least 8 characters",
+    });
+  }
+
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const existingUser = await pool.query(
+      "SELECT id FROM auth_users WHERE email = $1",
+      [normalizedEmail],
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        message: "Email is already registered",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const result = await pool.query(
+      `INSERT INTO auth_users (name, email, password_hash)
+       VALUES ($1, $2, $3)
+       RETURNING id, name, email, created_at`,
+      [name.trim(), normalizedEmail, passwordHash],
+    );
+
+    res.status(201).json({
+      message: "User registered successfully",
+      user: result.rows[0],
+    });
+  } catch (error) {
+    // Handle concurrent registration attempts for the same email.
+    if (error.code === "23505") {
+      return res.status(409).json({
+        message: "Email is already registered",
+      });
+    }
+
+    next(error);
+  }
+});
+
 // Handle unknown routes
 app.use((req, res, next) => {
   res.status(404).json({
