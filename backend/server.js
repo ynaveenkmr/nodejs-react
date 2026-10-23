@@ -141,12 +141,17 @@ app.delete("/api/users/:id", async (req, res, next) => {
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
 
-  // Expected format: Bearer <token>
-  const token = authHeader?.split(" ")[1];
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      message: "Bearer token required",
+    });
+  }
+
+  const token = authHeader.slice(7).trim();
 
   if (!token) {
     return res.status(401).json({
-      message: "Access token required",
+      message: "Bearer token required",
     });
   }
 
@@ -154,6 +159,12 @@ function authenticateToken(req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET, {
       algorithms: ["HS256"],
     });
+
+    if (typeof decoded.sub !== "string") {
+      return res.status(401).json({
+        message: "Invalid or expired token",
+      });
+    }
 
     req.user = { id: decoded.sub };
     next();
