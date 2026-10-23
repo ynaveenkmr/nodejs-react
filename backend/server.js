@@ -33,7 +33,7 @@ app.get("/health", async (req, res) => {
 });
 
 // GET: all users
-app.get("/api/users", async (req, res) => {
+app.get("/api/users", async (req, res, next) => {
   try {
     const result = await pool.query(
       "SELECT id, name, role FROM users ORDER BY id",
@@ -41,13 +41,12 @@ app.get("/api/users", async (req, res) => {
 
     res.json(result.rows);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to fetch users" });
+    next(error);
   }
 });
 
 // POST: create a user
-app.post("/api/users", async (req, res) => {
+app.post("/api/users", async (req, res, next) => {
   const { name, role } = req.body;
 
   if (
@@ -71,13 +70,12 @@ app.post("/api/users", async (req, res) => {
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to create user" });
+    next(error);
   }
 });
 
 // PUT: update a user
-app.put("/api/users/:id", async (req, res) => {
+app.put("/api/users/:id", async (req, res, next) => {
   const id = Number(req.params.id);
   const { name, role } = req.body;
 
@@ -109,13 +107,12 @@ app.put("/api/users/:id", async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to update user" });
+    next(error);
   }
 });
 
 // DELETE: remove a user
-app.delete("/api/users/:id", async (req, res) => {
+app.delete("/api/users/:id", async (req, res, next) => {
   const id = Number(req.params.id);
 
   if (!Number.isInteger(id) || id < 1) {
@@ -134,9 +131,33 @@ app.delete("/api/users/:id", async (req, res) => {
 
     res.json({ message: "User deleted successfully" });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to delete user" });
+    next(error);
   }
+});
+
+// Handle unknown routes
+app.use((req, res, next) => {
+  res.status(404).json({
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+  });
+});
+
+// Centralized error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  const status =
+    Number.isInteger(err.status) && err.status >= 400 && err.status <= 599
+      ? err.status
+      : 500;
+
+  res.status(status).json({
+    message: status < 500 ? err.message : "Internal server error",
+  });
 });
 
 const PORT = process.env.PORT || 5000;
