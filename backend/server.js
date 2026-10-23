@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const pool = require("./db");
 
@@ -136,6 +137,55 @@ app.delete("/api/users/:id", async (req, res, next) => {
   }
 });
 
+//Add authentication middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  // Expected format: Bearer <token>
+  const token = authHeader?.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({
+      message: "Access token required",
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
+
+    req.user = { id: decoded.sub };
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      message: "Invalid or expired token",
+    });
+  }
+}
+
+//Create a protected route
+app.get("/api/auth/profile", authenticateToken, async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email
+       FROM auth_users
+       WHERE id = $1`,
+      [req.user.id],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        message: "User no longer exists",
+      });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST: register a user
 app.post("/api/auth/register", async (req, res, next) => {
   const { name, email, password } = req.body;
@@ -191,6 +241,57 @@ app.post("/api/auth/register", async (req, res, next) => {
       });
     }
 
+    next(error);
+  }
+});
+
+// POST: login
+app.post("/api/auth/login", async (req, res, next) => {
+  const { email, password } = req.body;
+
+  if (
+    typeof email !== "string" ||
+    !email.trim() ||
+    typeof password !== "string" ||
+    !password
+  ) {
+    return res.status(400).json({
+      message: "Email and password are required",
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email, password_hash
+       FROM auth_users
+       WHERE email = $1`,
+      [email.trim().toLowerCase()],
+    );
+
+    const user = result.rows[0];
+
+    // Use the same message for both cases to avoid revealing registered emails.
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    const token = jwt.sign({ sub: String(user.id) }, process.env.JWT_SECRET, {
+      expiresIn: "15m",
+      algorithm: "HS256",
+    });
+
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
     next(error);
   }
 });
