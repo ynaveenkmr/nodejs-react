@@ -32,7 +32,39 @@ function App() {
   }
 
   useEffect(() => {
-    fetchUsers();
+    let isActive = true;
+
+    async function loadUsers() {
+      try {
+        setError("");
+
+        const response = await fetch(API_URL);
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch users");
+        }
+
+        const data = await response.json();
+
+        if (isActive) {
+          setUsers(data);
+        }
+      } catch (err) {
+        if (isActive) {
+          setError(err.message);
+        }
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadUsers();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   async function handleSubmit(event) {
